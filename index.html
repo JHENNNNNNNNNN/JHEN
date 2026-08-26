@@ -286,8 +286,8 @@ let activeCategory = 'project';
 const expandedTaskIds = new Set();
 const expandedMeetingIds = new Set();
 const expandedMonths = new Set();
-const revealedPayIds = new Set();
-function togglePayReveal(id){ if(revealedPayIds.has(id)) revealedPayIds.delete(id); else revealedPayIds.add(id); render(); }
+const revealedOtDetails = new Set();
+function toggleOtDetail(id){ if(revealedOtDetails.has(id)) revealedOtDetails.delete(id); else revealedOtDetails.add(id); render(); }
 const revealedMonthPay = new Set();
 function toggleMonthPayReveal(k){ if(revealedMonthPay.has(k)) revealedMonthPay.delete(k); else revealedMonthPay.add(k); render(); }
 let stdRowOpen = false;
@@ -632,7 +632,7 @@ function TaskCard(task){
         </div>
         <div class="task-actions">
           ${task.steps && task.steps.length ? `<button class="icon-btn" onclick="toggleExpandTask('${task.id}')">${expanded?'⌃':'⌄'}</button>` : ''}
-          <button class="icon-btn" onclick="openTaskModal('${task.id}')">✎</button>
+          <button class="icon-btn" onclick="openTaskModal('${task.id}')">✏️</button>
           <button class="icon-btn" onclick="deleteTask('${task.id}')">🗑</button>
         </div>
       </div>
@@ -751,7 +751,7 @@ function ProjectCard(p){
           ${escapeHtml(p.name)}
         </div>
         <div class="card-actions">
-          <button class="icon-btn" onclick="openProjectModal('${p.id}')">✎</button>
+          <button class="icon-btn" onclick="openProjectModal('${p.id}')">✏️</button>
           <button class="icon-btn" onclick="deleteProject('${p.id}')">🗑</button>
         </div>
       </div>
@@ -845,7 +845,7 @@ function MeetingCard(m){
           <div class="meeting-date">${fmtDate(m.date)}${m.time ? ' '+m.time : ''}${m.attendees && m.attendees.length ? ' · '+m.attendees.join('、') : ''}</div>
         </div>
         <div class="card-actions">
-          <button class="icon-btn" onclick="event.stopPropagation();openMeetingModal('${m.id}')">✎</button>
+          <button class="icon-btn" onclick="event.stopPropagation();openMeetingModal('${m.id}')">✏️</button>
           <button class="icon-btn" onclick="event.stopPropagation();deleteMeeting('${m.id}')">🗑</button>
         </div>
       </div>
@@ -1048,13 +1048,14 @@ function OvertimeView(){
                     <span class="tag" style="flex:none;background:${locationColor(e.location).bg};color:${locationColor(e.location).fg};border-color:${locationColor(e.location).fg};">${locationLabel(e.location)}</span>
                     ${(e.location==='WJE' && e.dayType && e.dayType!=='weekday') ? `<span class="tag" style="flex:none;">${DAYTYPE_LABEL[e.dayType]}</span>` : ''}
                     <span class="ot-date">${fmtDate(e.date)}</span>
-                    <span class="ot-time">${e.start}–${e.end}${e.breakMinutes?'(休'+e.breakMinutes+'分)':''}</span>
-                    <span class="ot-hours" style="${e.pay?'cursor:pointer;':''}" onclick="${e.pay?`togglePayReveal('${e.id}')`:''}">${(e.hours||0).toFixed(1)}h${e.pay ? ' · NT$••••' : ''}</span>
-                    <button class="icon-btn" onclick="openOvertimeModal('${e.id}')">✎</button>
-                    <button class="icon-btn" onclick="duplicateOvertime('${e.id}')" title="複製到別的日期">📄</button>
-                    <button class="icon-btn" onclick="deleteOvertime('${e.id}')">🗑</button>
+                    <span class="ot-hours" style="cursor:pointer;text-decoration:underline dotted;" onclick="toggleOtDetail('${e.id}')">${(e.hours||0).toFixed(1)}h</span>
+                    <div style="display:flex;gap:2px;flex:none;">
+                      <button class="icon-btn" onclick="openOvertimeModal('${e.id}')">✏️</button>
+                      <button class="icon-btn" onclick="duplicateOvertime('${e.id}')" title="複製到別的日期">📄</button>
+                      <button class="icon-btn" onclick="deleteOvertime('${e.id}')">🗑</button>
+                    </div>
                   </div>
-                  ${(e.pay && revealedPayIds.has(e.id)) ? `<div class="ot-pay-detail">💰 實際金額:NT$${Math.round(e.pay)}</div>` : ''}
+                  ${revealedOtDetails.has(e.id) ? `<div class="ot-pay-detail">🕐 ${e.start}–${e.end}${e.breakMinutes?'(休'+e.breakMinutes+'分)':''}${e.pay?' · 💰NT$'+Math.round(e.pay):''}</div>` : ''}
                 </div>
               `).join('') : ''}
             </div>
