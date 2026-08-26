@@ -173,10 +173,12 @@
   .month-header{ display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
   .month-name{ font-size:13.5px; font-weight:700; }
   .month-total{ font-size:12.5px; color:var(--accent-deep); font-weight:700; }
-  .loc-summary{ font-size:11.5px; color:var(--muted); margin:-4px 0 8px; }
-  .ot-entry{ display:flex; justify-content:space-between; align-items:center; gap:6px; padding:8px 0; border-top:1px solid var(--border); flex-wrap:wrap; }
-  .ot-entry:first-of-type{ border-top:none; }
+  .loc-summary{ font-size:11.5px; color:var(--muted); margin:6px 0 12px; line-height:1.7; }
+  .ot-entry-wrap{ padding:8px 0; border-top:1px solid var(--border); }
+  .ot-entry-wrap:first-of-type{ border-top:none; padding-top:0; }
+  .ot-entry{ display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap; }
   .ot-entry .tag{ max-width:64px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ot-pay-detail{ font-size:12.5px; font-weight:700; color:var(--accent-deep); margin-top:6px; padding-left:2px; font-variant-numeric:tabular-nums; }
   .ot-date{ font-size:12.5px; font-weight:600; width:40px; flex:none; font-variant-numeric:tabular-nums; }
   .ot-time{ font-size:12px; color:var(--muted); flex:1; font-variant-numeric:tabular-nums; }
   .ot-hours{ font-size:13px; font-weight:700; color:var(--accent-deep); flex:none; margin-right:2px; font-variant-numeric:tabular-nums; }
@@ -284,6 +286,12 @@ let activeCategory = 'project';
 const expandedTaskIds = new Set();
 const expandedMeetingIds = new Set();
 const expandedMonths = new Set();
+const revealedPayIds = new Set();
+function togglePayReveal(id){ if(revealedPayIds.has(id)) revealedPayIds.delete(id); else revealedPayIds.add(id); render(); }
+const revealedMonthPay = new Set();
+function toggleMonthPayReveal(k){ if(revealedMonthPay.has(k)) revealedMonthPay.delete(k); else revealedMonthPay.add(k); render(); }
+let stdRowOpen = false;
+function toggleStdRow(){ stdRowOpen = !stdRowOpen; render(); }
 
 let currentSheetSubmit = null;
 let draftSteps = [];
@@ -998,12 +1006,19 @@ function OvertimeView(){
   if(keys.length && expandedMonths.size===0) expandedMonths.add(keys[0]);
 
   return `
-    <div class="card std-row">
-      <span class="lbl">每日標準工時(用於「WJE」地點)</span>
-      <div>
-        <input class="std-input" type="number" min="0" max="24" step="0.5" value="${state.overtime.standardHours}" onchange="updateStandardHours(this.value)"> 小時
+    ${stdRowOpen ? `
+      <div class="card std-row">
+        <span class="lbl">每日標準工時(用於「WJE」地點)</span>
+        <div>
+          <input class="std-input" type="number" min="0" max="24" step="0.5" value="${state.overtime.standardHours}" onchange="updateStandardHours(this.value)"> 小時
+          <button class="link-btn" style="margin-left:8px;" onclick="toggleStdRow()">收合</button>
+        </div>
       </div>
-    </div>
+    ` : `
+      <div class="listutil" style="justify-content:flex-start;">
+        <button class="link-btn" onclick="toggleStdRow()">⚙️ 標準工時設定(目前 ${state.overtime.standardHours} 小時)</button>
+      </div>
+    `}
     ${keys.length===0
       ? `<div class="empty-hint">還沒有紀錄<br>點右下角的 <b>+</b> 新增一筆</div>`
       : keys.map(k => {
@@ -1016,25 +1031,30 @@ function OvertimeView(){
             byLocation[loc] = (byLocation[loc]||0) + (e.hours||0);
             if(e.pay) payByLocation[loc] = (payByLocation[loc]||0) + e.pay;
           });
-          const locSummary = Object.keys(byLocation).map(loc => `<span style="color:${locationColor(loc).fg};font-weight:700;">${locationLabel(loc)} ${byLocation[loc].toFixed(1)}h${payByLocation[loc]?' (NT$'+Math.round(payByLocation[loc])+')':''}</span>`).join(' · ');
+          const locSummary = Object.keys(byLocation).map(loc => `<span style="color:${locationColor(loc).fg};font-weight:700;">${locationLabel(loc)} ${byLocation[loc].toFixed(1)}h</span>`).join(' · ');
           const totalPay = Object.values(payByLocation).reduce((s,v)=>s+v,0);
           const open = expandedMonths.has(k);
           return `
             <div class="card">
               <div class="month-header" onclick="toggleExpandMonth('${k}')">
                 <span class="month-name">${monthLabel(k)} ${open?'⌃':'⌄'}</span>
-                <span class="month-total">合計 ${total.toFixed(1)} 小時${totalPay?' · NT$'+Math.round(totalPay):''}</span>
+                <span class="month-total">合計 ${total.toFixed(1)} 小時${totalPay ? ` · <span style="text-decoration:underline dotted;" onclick="event.stopPropagation();toggleMonthPayReveal('${k}')">金額</span>` : ''}</span>
               </div>
+              ${(totalPay && revealedMonthPay.has(k)) ? `<div class="ot-pay-detail" style="margin:-2px 0 8px;">💰 本月實際金額:NT$${Math.round(totalPay)}</div>` : ''}
               ${Object.keys(byLocation).length>1 ? `<div class="loc-summary">${locSummary}</div>` : ''}
               ${open ? entries.map(e => `
-                <div class="ot-entry">
-                  <span class="tag" style="flex:none;background:${locationColor(e.location).bg};color:${locationColor(e.location).fg};border-color:${locationColor(e.location).fg};">${locationLabel(e.location)}</span>
-                  ${(e.location==='WJE' && e.dayType && e.dayType!=='weekday') ? `<span class="tag" style="flex:none;">${DAYTYPE_LABEL[e.dayType]}</span>` : ''}
-                  <span class="ot-date">${fmtDate(e.date)}</span>
-                  <span class="ot-time">${e.start}–${e.end}${e.breakMinutes?'(休'+e.breakMinutes+'分)':''}</span>
-                  <span class="ot-hours">${(e.hours||0).toFixed(1)}h${e.pay?' · NT$'+Math.round(e.pay):''}</span>
-                  <button class="icon-btn" onclick="openOvertimeModal('${e.id}')">✎</button>
-                  <button class="icon-btn" onclick="deleteOvertime('${e.id}')">🗑</button>
+                <div class="ot-entry-wrap">
+                  <div class="ot-entry">
+                    <span class="tag" style="flex:none;background:${locationColor(e.location).bg};color:${locationColor(e.location).fg};border-color:${locationColor(e.location).fg};">${locationLabel(e.location)}</span>
+                    ${(e.location==='WJE' && e.dayType && e.dayType!=='weekday') ? `<span class="tag" style="flex:none;">${DAYTYPE_LABEL[e.dayType]}</span>` : ''}
+                    <span class="ot-date">${fmtDate(e.date)}</span>
+                    <span class="ot-time">${e.start}–${e.end}${e.breakMinutes?'(休'+e.breakMinutes+'分)':''}</span>
+                    <span class="ot-hours" style="${e.pay?'cursor:pointer;':''}" onclick="${e.pay?`togglePayReveal('${e.id}')`:''}">${(e.hours||0).toFixed(1)}h${e.pay ? ' · NT$••••' : ''}</span>
+                    <button class="icon-btn" onclick="openOvertimeModal('${e.id}')">✎</button>
+                    <button class="icon-btn" onclick="duplicateOvertime('${e.id}')" title="複製到別的日期">📄</button>
+                    <button class="icon-btn" onclick="deleteOvertime('${e.id}')">🗑</button>
+                  </div>
+                  ${(e.pay && revealedPayIds.has(e.id)) ? `<div class="ot-pay-detail">💰 實際金額:NT$${Math.round(e.pay)}</div>` : ''}
                 </div>
               `).join('') : ''}
             </div>
@@ -1056,11 +1076,16 @@ function deleteOvertime(id){
   state.overtime.entries = state.overtime.entries.filter(e => e.id !== id);
   render(); persist();
 }
-function openOvertimeModal(id){
+function duplicateOvertime(id){
+  openOvertimeModal(null, id);
+}
+function openOvertimeModal(id, sourceId){
   const e = id ? state.overtime.entries.find(x => x.id === id) : null;
-  const initLoc = e ? (e.location||'WJE') : 'WJE';
-  const initDayType = e ? (e.dayType||'weekday') : 'weekday';
-  const initWage = e ? (e.wage||'') : (state.overtime.wages[initLoc] || '');
+  const src = (!e && sourceId) ? state.overtime.entries.find(x => x.id === sourceId) : null;
+  const ref = e || src;
+  const initLoc = ref ? (ref.location||'WJE') : 'WJE';
+  const initDayType = ref ? (ref.dayType||'weekday') : 'weekday';
+  const initWage = ref ? (ref.wage||'') : (state.overtime.wages[initLoc] || '');
   const body = `
     <label class="field"><span>日期</span><input id="ot-date" type="date" name="date" value="${e?e.date:todayISO()}"></label>
     <label class="field"><span>地點(WJE 照標準工時算加班;其他地點直接記錄總工時)</span>
@@ -1078,10 +1103,10 @@ function openOvertimeModal(id){
       </label>
     </div>
     <div class="field-row">
-      <label class="field"><span>開始時間</span><input id="ot-start" type="time" name="start" value="${e?e.start:'08:00'}" oninput="updateOvertimePreview()"></label>
-      <label class="field"><span>結束時間</span><input id="ot-end" type="time" name="end" value="${e?e.end:'17:00'}" oninput="updateOvertimePreview()"></label>
+      <label class="field"><span>開始時間</span><input id="ot-start" type="time" name="start" value="${ref?ref.start:'08:00'}" oninput="updateOvertimePreview()"></label>
+      <label class="field"><span>結束時間</span><input id="ot-end" type="time" name="end" value="${ref?ref.end:'17:00'}" oninput="updateOvertimePreview()"></label>
     </div>
-    <label class="field"><span>休息時間(分鐘)</span><input id="ot-break" type="number" min="0" name="breakMinutes" value="${e?e.breakMinutes:60}" oninput="updateOvertimePreview()"></label>
+    <label class="field"><span>休息時間(分鐘)</span><input id="ot-break" type="number" min="0" name="breakMinutes" value="${ref?ref.breakMinutes:60}" oninput="updateOvertimePreview()"></label>
     <label class="field"><span>時薪(選填,填了會自動算金額)</span><input id="ot-wage" type="number" min="0" step="1" name="wage" value="${initWage}" placeholder="例如:230" oninput="updateOvertimePreview()"></label>
     <div class="preview-box" id="ot-preview"></div>
     ${e ? `<button type="button" class="btn-danger-text" onclick="deleteOvertimeFromModal('${e.id}')">刪除這筆紀錄</button>` : ''}
