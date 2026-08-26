@@ -292,6 +292,7 @@ const revealedMonthPay = new Set();
 function toggleMonthPayReveal(k){ if(revealedMonthPay.has(k)) revealedMonthPay.delete(k); else revealedMonthPay.add(k); render(); }
 let stdRowOpen = false;
 function toggleStdRow(){ stdRowOpen = !stdRowOpen; render(); }
+let otMonthsInitialized = false;
 
 let currentSheetSubmit = null;
 let draftSteps = [];
@@ -1003,7 +1004,7 @@ function OvertimeView(){
     groups[k].push(e);
   });
   const keys = Object.keys(groups).sort((a,b) => a<b?1:-1);
-  if(keys.length && expandedMonths.size===0) expandedMonths.add(keys[0]);
+  if(keys.length && !otMonthsInitialized){ expandedMonths.add(keys[0]); otMonthsInitialized = true; }
 
   return `
     ${stdRowOpen ? `
