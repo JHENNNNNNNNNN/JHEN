@@ -975,6 +975,12 @@ function computeDisplayHours(location, dayType, start, end, breakMin, standardHo
 const LOCATION_LIST = ['WJE','盛淵','樂泰'];
 const DAYTYPE_LABEL = { weekday:'平日加班', restday:'休息日', holiday:'國定假日' };
 /** 依勞基法第24條分段計算加班費(WJE 專用)。hours 對於平日是「加班時數」,對休息日/國定假日是「當天實際工作時數」。 */
+function suggestDayType(dateStr){
+  if(!dateStr) return 'weekday';
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay();
+  return (day===0 || day===6) ? 'restday' : 'weekday';
+}
 function taiwanOvertimePay(hours, hourlyWage, dayType){
   if(!hourlyWage || hours<=0) return 0;
   let pay = 0;
@@ -1086,10 +1092,11 @@ function openOvertimeModal(id, sourceId){
   const src = (!e && sourceId) ? state.overtime.entries.find(x => x.id === sourceId) : null;
   const ref = e || src;
   const initLoc = ref ? (ref.location||'WJE') : 'WJE';
-  const initDayType = ref ? (ref.dayType||'weekday') : 'weekday';
+  const initDate = e ? e.date : todayISO();
+  const initDayType = ref ? (ref.dayType||'weekday') : suggestDayType(initDate);
   const initWage = ref ? (ref.wage||'') : (state.overtime.wages[initLoc] || '');
   const body = `
-    <label class="field"><span>日期</span><input id="ot-date" type="date" name="date" value="${e?e.date:todayISO()}"></label>
+    <label class="field"><span>日期</span><input id="ot-date" type="date" name="date" value="${initDate}" onchange="handleDateChange()"></label>
     <label class="field"><span>地點(WJE 照標準工時算加班;其他地點直接記錄總工時)</span>
       <select id="ot-location" name="location" onchange="handleLocationChange(${e?'true':'false'})">
         ${LOCATION_LIST.map(l => `<option value="${escapeAttr(l)}" ${initLoc===l?'selected':''}>${escapeHtml(locationLabel(l))}</option>`).join('')}
@@ -1103,6 +1110,7 @@ function openOvertimeModal(id, sourceId){
           <option value="holiday" ${initDayType==='holiday'?'selected':''}>國定假日(8小時內2倍,超過依平日加班倍率)</option>
         </select>
       </label>
+      <div class="empty-hint-sm" style="padding:0;">六、日會自動選「休息日」;國定假日請自己手動改選,系統不知道哪天放假喔</div>
     </div>
     <div class="field-row">
       <label class="field"><span>開始時間</span><input id="ot-start" type="time" name="start" value="${ref?ref.start:'08:00'}" oninput="updateOvertimePreview()"></label>
@@ -1146,6 +1154,14 @@ function handleLocationChange(isEdit){
   document.getElementById('daytype-row').style.display = (loc==='WJE') ? 'flex' : 'none';
   if(!isEdit && !wageInput.value && state.overtime.wages[loc]){
     wageInput.value = state.overtime.wages[loc];
+  }
+  updateOvertimePreview();
+}
+function handleDateChange(){
+  const dateEl = document.getElementById('ot-date');
+  const dtEl = document.getElementById('ot-daytype');
+  if(dtEl && dtEl.value !== 'holiday'){
+    dtEl.value = suggestDayType(dateEl.value);
   }
   updateOvertimePreview();
 }
