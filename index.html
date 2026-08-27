@@ -33,6 +33,7 @@
     --danger:#C9645F;
     --danger-soft:#F6DEDC;
     --cat-project-bg:#FBE4E6; --cat-project-fg:#C97B85;
+    --cat-daily-bg:#E3F0DE; --cat-daily-fg:#6B9C5D;
     --cat-weekly-bg:#FCEBD6; --cat-weekly-fg:#B9873B;
     --cat-monthly-bg:#E9E3F6; --cat-monthly-fg:#8570B8;
     --cat-adhoc-bg:#DCEAF6; --cat-adhoc-fg:#5E93BE;
@@ -134,6 +135,17 @@
   .task-title{ font-size:14px; font-weight:600; line-height:1.4; }
   .task-card.done .task-title{ color:var(--muted); text-decoration:line-through; }
   .task-note{ font-size:12.5px; color:var(--muted); margin-top:5px; line-height:1.5; }
+  .history-row{ display:flex; align-items:center; gap:6px; margin-top:7px; }
+  .history-lbl{ font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .history-dots{ display:flex; gap:3px; }
+  .hdot{
+    width:16px; height:16px; border-radius:5px; border:1.5px dotted var(--border);
+    display:flex; align-items:center; justify-content:center; font-size:9px; color:#fff;
+    background:var(--bg);
+  }
+  .hdot.done{ background:var(--primary); border-color:var(--primary); border-style:solid; }
+  .hdot.today{ border-color:var(--accent-deep); border-style:solid; }
+  .hdot.future{ opacity:.35; }
   .task-actions{ flex:none; display:flex; gap:2px; }
   .icon-btn{
     background:none; border:none; cursor:pointer; color:var(--muted); font-size:15px;
@@ -264,8 +276,9 @@
 const DEFAULT_STATE = {
   checklist: {
     categories: [
-      { id:'project', name:'專案',   emoji:'📁', bg:'var(--cat-project-bg)', fg:'var(--cat-project-fg)', tasks:[{ id:'proj-task-1', title:'🔪 排刀系統', tags:['進行中'], note:'測試修改中', steps:[], done:false },{ id:'proj-task-2', title:'📋 盤點系統', tags:['進行中'], note:'', steps:[], done:false },{ id:'proj-task-3', title:'📦 倉庫系統', tags:['進行中'], note:'', steps:[], done:false },{ id:'proj-task-4', title:'🗓️ 排程系統', tags:['待處理'], note:'未開始', steps:[], done:false }] },
-      { id:'weekly',  name:'每週',   emoji:'🌱', bg:'var(--cat-weekly-bg)',  fg:'var(--cat-weekly-fg)',  tasks:[{ id:'seed-meet-1', title:'部門會議', tags:['每週五 14:00'], note:'參與人員:副廠長、甄、雅洵、孟育、各生管', steps:[], done:false }] },
+      { id:'project', name:'專案',   emoji:'📁', bg:'var(--cat-project-bg)', fg:'var(--cat-project-fg)', tasks:[{ id:'proj-task-1', title:'🔪 排刀系統', tags:['進行中'], note:'測試修改中', steps:[], done:false, history:[] },{ id:'proj-task-2', title:'📋 盤點系統', tags:['進行中'], note:'', steps:[], done:false, history:[] },{ id:'proj-task-3', title:'📦 倉庫系統', tags:['進行中'], note:'', steps:[], done:false, history:[] },{ id:'proj-task-4', title:'🗓️ 排程系統', tags:['待處理'], note:'未開始', steps:[], done:false, history:[] }] },
+      { id:'daily',   name:'每日',   emoji:'☀️', bg:'var(--cat-daily-bg)',  fg:'var(--cat-daily-fg)',  tasks:[{ id:'seed-daily-1', title:'整理餘料表', tags:['早上8:00'], note:'', steps:[], done:false, history:[] }] },
+      { id:'weekly',  name:'每週',   emoji:'🌱', bg:'var(--cat-weekly-bg)',  fg:'var(--cat-weekly-fg)',  tasks:[{ id:'seed-meet-1', title:'部門會議', tags:['每週五 14:00'], note:'參與人員:副廠長、甄、雅洵、孟育、各生管', steps:[], done:false, history:[] }] },
       { id:'monthly', name:'每月',   emoji:'🗓️', bg:'var(--cat-monthly-bg)', fg:'var(--cat-monthly-fg)', tasks:[] },
       { id:'adhoc',   name:'不定時', emoji:'✨', bg:'var(--cat-adhoc-bg)',  fg:'var(--cat-adhoc-fg)',   tasks:[] }
     ]
@@ -379,6 +392,11 @@ function loadState(){
     if(raw) loaded = JSON.parse(raw);
   }catch(e){ loaded = null; }
   state = loaded ? deepMerge(DEFAULT_STATE, loaded) : JSON.parse(JSON.stringify(DEFAULT_STATE));
+  if(!state.checklist.categories.find(c=>c.id==='daily')){
+    const dailyCat = JSON.parse(JSON.stringify(DEFAULT_STATE.checklist.categories.find(c=>c.id==='daily')));
+    const projIdx = state.checklist.categories.findIndex(c=>c.id==='project');
+    state.checklist.categories.splice(projIdx>=0 ? projIdx+1 : 0, 0, dailyCat);
+  }
   if(!state.checklist.categories.find(c=>c.id===activeCategory)){
     activeCategory = state.checklist.categories[0] ? state.checklist.categories[0].id : 'project';
   }
@@ -620,6 +638,35 @@ function ChecklistView(){
   `;
 }
 
+function currentWeekDates(){
+  const now = new Date();
+  const dow = now.getDay(); /* 0 = 星期日 */
+  const dates = [];
+  for(let i=0;i<7;i++){
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow + i);
+    dates.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));
+  }
+  return dates;
+}
+function HistoryRow(task){
+  const hist = task.history || [];
+  if(hist.length===0) return '';
+  const dates = currentWeekDates();
+  const today = todayISO();
+  const doneCount = dates.filter(d => d<=today && hist.includes(d)).length;
+  const elapsed = dates.filter(d => d<=today).length;
+  return `<div class="history-row">
+    <span class="history-lbl">本週 ${doneCount}/${elapsed}</span>
+    <span class="history-dots">
+      ${dates.map((d,i) => {
+        const isFuture = d > today;
+        const isToday = d === today;
+        const isDone = hist.includes(d);
+        return `<span class="hdot ${isDone?'done':''} ${isToday?'today':''} ${isFuture?'future':''}" title="${WEEKDAYS[i]}${isDone?' 已完成':''}">${isDone?'✓':''}</span>`;
+      }).join('')}
+    </span>
+  </div>`;
+}
 function TaskCard(task){
   const expanded = expandedTaskIds.has(task.id);
   return `
@@ -630,6 +677,7 @@ function TaskCard(task){
           <div class="task-title">${escapeHtml(task.title)}</div>
           ${task.tags && task.tags.length ? `<div class="tag-row">${task.tags.map(tg=>`<span class="tag">${escapeHtml(tg)}</span>`).join('')}</div>` : ''}
           ${task.note ? `<div class="task-note">${escapeHtml(task.note)}</div>` : ''}
+          ${HistoryRow(task)}
         </div>
         <div class="task-actions">
           ${task.steps && task.steps.length ? `<button class="icon-btn" onclick="toggleExpandTask('${task.id}')">${expanded?'⌃':'⌄'}</button>` : ''}
@@ -650,7 +698,16 @@ function toggleExpandTask(id){
 function toggleTaskDone(id){
   const cat = state.checklist.categories.find(c => c.id === activeCategory);
   const task = cat.tasks.find(t => t.id === id);
-  if(task){ task.done = !task.done; render(); persist(); }
+  if(!task) return;
+  task.done = !task.done;
+  if(!task.history) task.history = [];
+  const today = todayISO();
+  if(task.done){
+    if(!task.history.includes(today)) task.history.push(today);
+  }else{
+    task.history = task.history.filter(d => d !== today);
+  }
+  render(); persist();
 }
 function deleteTask(id){
   if(!confirm('確定要刪除這個任務嗎?')) return;
@@ -660,7 +717,11 @@ function deleteTask(id){
 }
 function clearChecksInCategory(){
   const cat = state.checklist.categories.find(c => c.id === activeCategory);
-  cat.tasks.forEach(t => t.done = false);
+  const today = todayISO();
+  cat.tasks.forEach(t => {
+    t.done = false;
+    if(t.history) t.history = t.history.filter(d => d !== today);
+  });
   render(); persist();
 }
 
@@ -686,7 +747,7 @@ function openTaskModal(taskId){
     const note = form.elements['note'].value.trim();
     const steps = draftSteps.map(s=>s.trim()).filter(Boolean);
     if(task){ task.title=title; task.tags=tags; task.note=note; task.steps=steps; }
-    else{ cat.tasks.push({ id:uid(), title, tags, note, steps, done:false }); }
+    else{ cat.tasks.push({ id:uid(), title, tags, note, steps, done:false, history:[] }); }
     closeSheet(); render(); persist();
   });
 }
